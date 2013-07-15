@@ -140,25 +140,66 @@ The following examples demonstrate setting the proxy:
 	//the second argument specifies HTTPS
 	svcmgmt.setProxyUrl(proxy, true);
 
+##<a name="operation-status"> </a>How to: Get the status of an operation
 
+Many management operations return before the operation is completed. The underlying REST API returns a value of 202 Accepted, and return a ms-request-id HTTP response Header. The value returned in this header can be used with **GetOperationStatus** to retrieve the status of an operation.
 
-##APIs##
+##<a name="list-images"> </a>How to: Get a list of OS images
 
-**iaasClient.GetOperationStatus(requested, callback)**
+To retrieve a list of existing OS images, use **listOSImage**:
 
-- Many management calls return before the operation is completed. These return a value of 202 Accepted, and place a requested in the ms-request-id HTPP Header. To poll for completion of the request, use this API and pass in the requested value.
-- callback is required.
+	svcmgmt.listOSImage(function(error, response) {
+	  if (error) {
+	    console.log(error);
+	  } else {
+	    if (response && response.isSuccessful && response.body) {
+	      var rsp = response.body;
+	      console.log(rsp);
+	    } else {
+	      console.log('Unexpected');
+	    }
+	  }
+	});
 
-**iaasClient.GetOSImage(imagename, callback)**
+The response.body returned on success contains the list of images, along with information about each image. The following is an example of the information contained in the response body:
 
-- imagename is a required string name of the image.
-- callback is required.
-- The response object will contain properties of the named image if successful.
+	  { Category: 'Canonical',
+	    Label: 'Ubuntu Server 13.10',
+	    LogicalSizeInGB: '30',
+	    Name: 'b39f27a8b8c64d52b05eac6a62ebad85__Ubuntu-13_10-amd64-server-DEVELOPMENT-20130713-Juju_ALPHA-en-us-30GB',
+	    OS: 'Linux',
+	    Eula: 'http://www.ubuntu.com/project/about-ubuntu/licensing;http://www.ubuntu.com/aboutus/privacypolicy;http://www.ubuntu.com/aboutus/privacypolicy',
+	    Description: 'Ubuntu Server 13.10 (amd64 DEVELOPMENT-20130713-Juju_ALPHA) for Windows Azure. Ubuntu Server is the world\'s most popular Linux for cloud environments. Updates and patches for Ubuntu 13.10 will be available until 2014-07-17.  Ubuntu Server is the perfect platform for all workloads from web applications to NoSQL databases and Hadoop. More information can be found at:\nhttp://www.ubuntu.com/business/server' }
 
-**iaasClient.ListOSImages(callback)**
+##<a name="get-image"> </a>How to: Get properties of an OS image
 
-- callback is required.
-- The response object will contain an array of image objects if successful.
+To retrieve information on a specific OS image, use **getOSImage**:
+
+	svcmgmt.getOSImage('image name', function(error, response) {
+	  if (error) {
+	    console.log(error);
+	  } else {
+	    if (response && response.isSuccessful && response.body) {
+	      var rsp = response.body;
+	      console.log(rsp);
+	    } else {
+	      console.log('Unexpected');
+	    }
+	  }
+	});
+
+The response.body returned on success contains the image information. The following is an example of the information contained in the response body:
+
+	{ '$':
+	   { xmlns: 'http://schemas.microsoft.com/windowsazure',
+	     'xmlns:i': 'http://www.w3.org/2001/XMLSchema-instance' },
+	  Category: 'Canonical',
+	  Label: 'Ubuntu Server 13.10',
+	  LogicalSizeInGB: '30',
+	  Name: 'b39f27a8b8c64d52b05eac6a62ebad85__Ubuntu-13_10-amd64-server-DEVELOPMENT-20130713-Juju_ALPHA-en-us-30GB',
+	  OS: 'Linux',
+	  Eula: 'http://www.ubuntu.com/project/about-ubuntu/licensing;http://www.ubuntu.com/aboutus/privacypolicy;http://www.ubuntu.com/aboutus/privacypolicy',
+	  Description: 'Ubuntu Server 13.10 (amd64 DEVELOPMENT-20130713-Juju_ALPHA) for Windows Azure. Ubuntu Server is the world\'s most popular Linux for cloud environments. Updates and patches for Ubuntu 13.10 will be available until 2014-07-17. Ubuntu Server is the perfect platform for all workloads from web applications to NoSQL databases and Hadoop. More information can be found at:\nhttp://www.ubuntu.com/business/server' }
 
 **iaasClient.CreateOSImage(imageName, mediaLink, imageOptions, callback)**
 
