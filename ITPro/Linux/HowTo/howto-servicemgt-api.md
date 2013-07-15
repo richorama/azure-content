@@ -2,54 +2,145 @@
 
 <div chunk="../chunks/linux-left-nav.md" />
 
-#How to Use the Service Management API
+#How to Manage Windows Azure Virtual Machines using Node.js
 
-##Initialization##
+This guide will show you how to programmatically perform common management tasks for Windows Azure Virtual Machines. The Windows Azure SDK for Node.js provides access to service management functionality for a variety of Windows Azure Services, including Windows Azure Virtual machines.
 
-To invoke the Windows Azure IaaS service management API from NodeJS, the iaasclient.js module is used.
+## <a name="what-is"> </a>What is service management?
 
-	var iaasCient = require('iaasclient');
+The SDK for Node.js exports the **serverManagementService** object, which provies programmatic access to service management functionality for the Windows Azure Platform. Much of the management functionality available through the [Windows Azure Management Portal](https://manage.windowsazure.com) is accessible using this object.
 
-First create an instance of the IaasClient. All calls to the API will use this object. The subscription id, credentials, and other connection options are established at this time. To manage more than one subscription, create more than one IaasClient.
+## <a name="concepts"> </a>Concepts
 
-	var iaasClient = new IaasClient(subscriptionid, auth, options);
+The Windows Azure SDK for Python wraps the [Windows Azure Service Management API](http://msdn.microsoft.com/en-us/library/windowsazure/ee460799.aspx), which is a REST API. All API operations are performed over SSL and mutually authenticated using X.509 v3 certificates. The management service may be accessed from within a service running in Windows Azure, or directly over the Internet from any application that can send an HTTPS request and receive an HTTPS response.
 
-- Subscriptionid is a required string. It should be the subscription id of the account being accessed.
-- Auth is an optional object that specifies the private key and public certificate to be used with this account.	
-	- keyfile - file path of .pem file that has private key. Ignored if keyvalue is specified.
-	- keyvalue - actual value of private key as stored in a .pem file.
-	- certfile - file path of .pem file that has public certificate. Ignored if cervalue is specified.
-	- certvalue - actual value of public certificate as stored in a .pem file.
-	- If the above values are not specified, then process environment variable values `CLIENT_AUTH_KEYFILE` and `CLIENT_AUTH_CERTFILE` are read and used. If these are not set, then default values for the files are tried: priv.pem and pub.pem.
-	- If it is not possible to load the private key and public certificate, then an error is thrown.
+## <a name="setup-certificate"> </a>Setup a Windows Azure management certificate
 
-- Options is an optional object that may be used to control properties used by the client.	
-	- host - host name of Azure management server. If not specified, it uses the default host.
-	- apiversion - version string to use in the HTTP header. If not specified uses default version.
-	- serializetype - may be XML or JSON. If not specified uses default serialization.
+To use service management, you must provide your Windows Azure subscription ID and the path to a valid management certificate. You can obtain your subscription ID through the [management portal], and you can create management certificates in a number of ways. In this guide [OpenSSL](http://www.openssl.org/) is used, which you can [download for Windows](http://www.openssl.org/related/binaries.html) and run in a console.
 
-Optionally a tunneling proxy may be used to enable the HTTPS request to go through a proxy. When the IaasClient is created it will process the environment variable `HTTPS_PROXY`. If it is set to a valid URL, then the host name and port are parsed from the URL and are used in subsequent requests to identify the proxy.
+You must create two certificates, one for the server (a .cer file containing the public certificate) and one for the client (a .pem file containing the private key). To create the private key file, execute the following command:
 
-		iaasClient.SetProxyUrl(proxyurl)
+	openssl req -x509 -nodes -days 365 -newkey rsa:1024 -keyout mykey.pem -out mykey.pem
 
-The SetProxyUrl may be called to explicitly set the proxy host and port. It has the same effect as setting the `HTTPS_PROXY` environment variable, and will override the environment setting.
+To extract the .cer certificate, use the following command:
 
-##Callbacks##
+	openssl x509 -inform pem -in mykey.pem -outform der -out mycert.cer
 
-All the APIs have a required callback argument. Completion of the request is signaled by calling the function passed in the callback. 
+You must also extract the public certificate as a .pem file. This file, along with the key, are used to access the service management functionality of the Node.js SDK. To extract the certificate as a .pem file, use the following command:
 
-	callback(rsp)
+	openssl x509 -inform pem -in mykey.pem -outform pem -out mycert.pem
 
-- The callback has a single parameter which is the response object.
-- isSuccessful - true or false
-- statusCode - HTTP Status code from the response
-- response - the response parsed into a javascript object. Set if isSuccessful is true.
-- error - a javascript object holding error information set if isSuccessful is false.
-- body - the actual body of the response as a string
-- headers - the actual HTTP headers of the response
-- reqopts - the Node HTTP request options used to make the request.
+<div class="dev-callout">
+<b>Note</b>
+<p>For more information about Windows Azure certificates, see <a href="http://msdn.microsoft.com/en-us/library/windowsazure/gg981929.aspx">Managing Certificates in Windows Azure</a>. For a complete description of OpenSSL parameters, see the documentation at <a href="http://www.openssl.org/docs/apps/openssl.html">http://www.openssl.org/docs/apps/openssl.html</a>.</p>
+</div>
 
-Note that in some cases completion may only indicate that the request was accepted. In this case use **GetOperationStatus** to get the final status.
+After you have created these files, you will need to upload the .cer file to Windows Azure by selecting **Settings**, **Management certificates**, and then **Upload** in the [management portal].
+
+![management certificates page of the management portal][manage-certs]
+
+![select certificate dialog][cert-upload]
+
+You may now delete the .cer file, however you must retain both the mykey.pem and mycert.pem files for use by your application.
+
+## <a name="create-app"> </a>Create a Node.js application
+
+Create a blank Node.js application. For instructions creating a Node.js application, see [Create and deploy a Node.js application to a Windows Azure Web Site], [Node.js Cloud Service] (using Windows PowerShell), or [Web Site with WebMatrix].
+
+## <a name="configure-access"> </a>Configure your application
+
+To manage Windows Azure services, you need to download and use the Node.js
+azure package, which includes a set of convenience libraries that
+communicate with the service management REST API.
+
+### Use Node Package Manager (NPM) to obtain the package
+
+1.  Use a command-line interface such as **PowerShell** (Windows,) **Terminal** (Mac,) or **Bash** (Unix), navigate to the folder where you created your sample application.
+
+2.  Type **npm install azure** in the command window, which should
+    result in the following output:
+
+        azure@0.7.5 node_modules\azure
+		├── dateformat@1.0.2-1.2.3
+		├── xmlbuilder@0.4.2
+		├── node-uuid@1.2.0
+		├── mime@1.2.9
+		├── underscore@1.4.4
+		├── validator@1.1.1
+		├── tunnel@0.0.2
+		├── wns@0.5.3
+		├── xml2js@0.2.7 (sax@0.5.2)
+		└── request@2.21.0 (json-stringify-safe@4.0.0, forever-agent@0.5.0, aws-sign@0.3.0, tunnel-agent@0.3.0, oauth-sign@0.3.0, qs@0.6.5, cookie-jar@0.3.0, node-uuid@1.4.0, http-signature@0.9.11, form-data@0.0.8, hawk@0.13.1)
+
+3.  You can manually run the **ls** command to verify that a
+    **node\_modules** folder was created. Inside that folder you will
+    find the **azure** package, which contains the libraries you need to
+    access storage.
+
+### Import the package
+
+Using Notepad or another text editor, add the following to the top the
+**server.js** file of the application where you intend to use service management:
+
+    var azure = require('azure');
+
+##<a name="setup-connection"> </a>How to: Connect to service management
+
+When creating an instance of the **serviceManagementService** object, you must provide your Windows Azure Subscription Id and an authentication object. The authentication object must provide a management certificate which is used to authenticate to the Windows Azure REST API. Both the private and public key must be provided in PEM format, and can be provided either as a file path or as string. 
+
+The following examples demonstrate how to create a new instance of the **serviceManagementService**:
+
+**certificate from file**
+
+	var auth={
+	    "keyfile": "\path\to\mykey.pem",
+	    "certfile": "\path\to\mycert.pem"
+	  };
+
+	var subscriptionId="your subscription id";
+	var svcmgmt = azure.createServiceManagementService(subscriptionId, auth);
+
+**certificate from string**
+
+	var auth={
+	    "keyvalue": "-----BEGIN RSA PRIVATE KEY-----\
+					...\
+					-----END RSA PRIVATE KEY-----\
+					-----BEGIN CERTIFICATE-----\
+					...\
+					-----END CERTIFICATE-----",
+	    "certvalue": "-----BEGIN CERTIFICATE-----\
+					...\
+					-----END CERTIFICATE-----"
+	  };
+
+	var subscriptionId="your subscription id";
+	var svcmgmt = azure.createServiceManagementService(subscriptionId, auth);
+
+If you use a proxy when accessing the Internet, you can use **setProxyUrl** or **setProxy** to specify the proxy information required by your network. Using **setProxyUrl** allows you to provide the URL of your proxy server, while **setProxy** should be used for proxy servers that require specific headers or authentication.
+
+If the HTTPS_PROXY or HTTP_PROXY environment variables exist and contain a valid URL, this will be used as the default proxy URL unless overridden by **setProxyUrl** or **setProxy**.
+
+<div class="dev-callout">
+<b>Note</b>
+<p>The HTTPS_PROXY value takes precedence over HTTP_PROXY, so you should only set one or the other.</p>
+</div>
+
+The following examples demonstrate setting the proxy:
+
+	//using a url
+	svcmgmt.setProxyUrl('http://proxy-address:80')
+	
+	//using basic authentication over HTTPS
+	var proxy = {
+		"host": "proxy-address",
+		"port": 80,
+		"proxyAuth": "username:password"
+	}
+	//the second argument specifies HTTPS
+	svcmgmt.setProxyUrl(proxy, true);
+
+
 
 ##APIs##
 
@@ -416,3 +507,7 @@ Here is a sample javascript code that creates a hosted service and a deployment,
 	    showErrorResponse(rspobj);
 	  }
 	});
+
+
+
+[management portal]: https://manage.windowsazure.com/
